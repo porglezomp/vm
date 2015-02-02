@@ -1,68 +1,183 @@
                            PORGLEZOMP PROCESSOR
                           A FICTIONAL 16-BIT ISA
+                             SPEC REVISION II
 
 Registers
 ---------
 
-The processor has 8 16-bit registers. Each register can be accessed as a pair
-of 8-bit "half-registers" for some instructions
+The processor has 8 16-bit registers. For some instructions, the first high and
+low bytes of the first four registers can be accessed as 8-bit "half-registers."
 
 The top 4 registers are aliased by purpose:
-* fp is the frame pointer, and points to the bottom of the stack frame
-* sp is the stack pointer, and points to the top of the stack
-* lr is the link register, the next address is stored in it when the
-  BRL pseudoinstruction is called
+* sp is the stack pointer, and is used to point to the top of the stack
+* fp is the frame pointer, and is used to point to the bottom of the stack frame
+* lr is the link register, the next address is stored in it when the BRL
+  pseudoinstruction is called
 * pc is the program counter
 
-| r0    | r1    | r2    | r3    | r4    | r5    | r6    | r7    |
-| h0 l0 | h1 l1 | h2 l2 | h3 l3 | h4 l4 | h5 l5 | h6 l6 | h7 l7 |
-                                | sp    | fp    | lr    | pc    |
+| r0    | r1    | r2    | r3    | r4 | r5 | r6 | r7 |
+| l0 h0 | l1 h1 | l2 h2 | l3 h3 | sp | fp | lr | pc |
 
 Memory
 ------
 The processor has 64KiB of directly addressible RAM.
+By convention, the stack grows up, starting after the program.
 
 Instructions
 ------------
 
-MOV
-Usage: MOV <reg dest>, <reg src>
-Example: MOV r0, r1
-Meaning: The value in r1 will be placed in r0
-Instruction format: INSTR(4) DEST(4) SRC(4) 0000
-Number: 0
+All instructions are word aligned
 
-MOVI
-Usage: MOVI <halfreg dest>, <imm src>
-Example: MOVI l0, 64
-Meaning: The value 64 will be placed in the low byte of r0
-Instrution format: INSTR(4) DEST(4) VALUE(8)
-Number: 1
+### MOV ###
 
-STR
-Usage: STR <reg src>, <reg addr>
-Example: STR r3, r0
-Meaning: Store the value in r4 at the address pointed to by r0
-Instruction format: INSTR(4) SRC(4) ADDR(4) HALF?(1) HALFADDR?(1)
-NOTE: Supports half registers
+Usage:
+    MOV <reg dest>, <reg src>                   # dest = src
+    MOV <reg dest>, [<hreg high>, <hreg low>]   # dest = high << 8 & low
+    MOV <hreg dest>, <hreg src>                 # dest = src
 
-STRI
-Usage: STRI <reg src>, <imm relative>
-Example: STRI r3, 12
-Meaning: Store the value in r4 at fp + 12
-Instruction format: INSTR(4) SRC(4) HALF?(1) ADDR(7)
-NOTE: Supports half registers
+Format:
+    0001 0[dest: 3] 0[src: 3]  0000
+    0001 0[dest: 3] 1[high: 3] [low: 3]1
+    0001 1[dest: 3] 1[src: 3]  1111
 
-LDR
-Usage: LDR <reg dest>, <reg src>
-Example: LDR r3, r0
-Meaning: Load the value pointed to by r0 into r4
-Instruction format: INSTR(4) SRC(4) ADDR(4) HALF?(1) HALFADDR?(1)
-NOTE: Supports half registers
+### MOVI ###
 
-LDRI
-Usage: LDRI <reg dest>, <imm relative>
-Example: LDRI r3, 12
-Meaning: Load the value at fp + 12 into r3
-Instruction format: INSTR(4) SRC(4) HALF?(1) ADDR(7)
-NOTE: Supports half registers
+Usage:
+    MOVI <hreg dest>, <imm val>                 # dest = val
+
+Format:
+    0010 1[dest: 3] [val: 8]
+
+### STR ###
+*NOTE:* This is a double wide instruction 
+
+Usage:
+    STR <reg src>, <reg addr>                   # *addr = (word) src
+    STR <reg src>, <imm addr>                   # *addr = (word) src
+    STR <hreg src>, <reg addr>                  # *addr = (byte) src
+    STR <hreg src>, <imm addr>                  # *addr = (byte) src
+
+Format:
+    0011 0[src: 3] 0[addr: 3] 0000 0000 0000 0000 0000
+    0011 0[src: 3] 1111       1111 [addr: 16]
+    0011 1[src: 3] 0[addr: 3] 0000 0000 0000 0000 0000
+    0011 1[src: 3] 1111       1111 [addr: 16]
+
+### LDR ###
+*NOTE:* This is a double wide instruction
+
+Usage:
+    STR <reg dest>, <reg addr>                  # dest = (word) *addr
+    STR <reg dest>, <imm addr>                  # dest = (word) *addr
+    STR <hreg dest>, <reg addr>                 # dest = (byte) *addr
+    STR <hreg dest>, <imm addr>                 # dest = (byte) *addr
+
+Format:
+    0011 0[dest: 3] 0[addr: 3] 0000 0000 0000 0000 0000
+    0011 0[dest: 3] 1111       1111 [addr: 16]
+    0011 1[dest: 3] 0[addr: 3] 0000 0000 0000 0000 0000
+    0011 1[dest: 3] 1111       1111 [addr: 16]
+
+### ADD ###
+
+Usage:
+    ADD <reg dest>, <reg a>, <reg b>            # dest = a + b
+    ADD <reg dest>, <imm val>                   # dest = dest + val
+    ADD <hreg dest>, <hreg a>, <hreg b>         # dest = a + b
+    ADD <hreg dest>, <imm val>                  # dest = dest + val
+    SADD <reg dest>, <reg a>, <reg b>           # dest = a + b
+    SADD <hreg dest>, <hreg a>, <hreg b>        # dest = a + b
+
+
+Format:
+    0100 0[dest: 3] 00[a: 3][b: 3]
+    0100 0[dest: 3] 1[val: 7]
+    0100 1[dest: 3] 00[a: 3][b: 3]
+    0100 1[dest: 3] 1[val: 7]
+    0100 0[dest: 3] 01[a: 3][b: 3]
+    0100 1[dest: 3] 01[a: 3][b: 3]
+
+### SUB ###
+
+Usage:
+    SUB <reg dest>, <reg a>, <reg b>            # dest = a - b
+    SUB <reg dest>, <imm val>                   # dest = dest - val
+    SUB <hreg dest>, <hreg a>, <hreg b>         # dest = a - b
+    SUB <hreg dest>, <imm val>                  # dest = dest - val
+    SSUB <reg dest>, <reg a>, <reg b>           # dest = a - b
+    SSUB <hreg dest>, <hreg a>, <hreg b>        # dest = a - b
+
+
+Format:
+    0101 0[dest: 3] 00[a: 3][b: 3]
+    0101 0[dest: 3] 1[val: 7]
+    0101 1[dest: 3] 00[a: 3][b: 3]
+    0101 1[dest: 3] 1[val: 7]
+    0101 0[dest: 3] 01[a: 3][b: 3]
+    0101 1[dest: 3] 01[a: 3][b: 3]
+
+### SHF ###
+
+Usage:
+    op = LSL, LSR, ASR, or ROR
+    <op> <reg r>, <reg shift>
+    <op> <reg r>, <imm shift>
+    <op> <hreg r>, <reg shift>
+    <op> <hreg r>, <imm shift>
+
+Format:
+    LSL = 00, LSR = 01, ASR = 10, ROR = 11
+    0110 [op: 2]01 0[r: 3] [shift: 4]
+    0110 [op: 2]00 0[r: 3] [shift: 4]
+    0110 [op: 2]11 1[r: 3] [shift: 4]
+    0110 [op: 2]10 1[r: 3] [shift: 4]
+
+### CMP ###
+
+Usage:
+    op = EQ, NE, LT, GT
+    <op> <reg a>, <reg b>
+    <op> <reg a>, <imm b>
+    <op> <hreg a>, <reg b>
+    <op> <hreg a>, <imm b>
+
+Format:
+    0111 [op: 2]10 0[a: 3] [b: 3]0
+    0111 [op: 2]00 [a: 3]  [b: 5]
+    0111 [op: 2]11 1[a: 3] [b: 3]0
+    0111 [op: 2]01 [a: 3]  [b: 5]
+
+### BIT ###
+
+Usage:
+    op = AND, ORR, XOR, NOT
+    <op> <reg a>, <reg b>
+    <op> <hreg a>, <hreg b>
+
+Format:
+    1000 [op: 2]00 0[a: 3] [b: 3]0
+    1000 [op: 2]00 1[a: 3] [b: 3]0
+
+### BR ###
+*NOTE:* This is a double wide instruction 
+
+Usage:
+    BR <imm addr>
+
+Format:
+    1001 0000 0000 0000 [addr: 16]
+
+### SYS ###
+The SYS instruction sends a system message to perform various hardware
+operations.
+*NOTE:* What this instruction does is subject to a lot of variation. This is
+only a very early draft version and will perhaps be completely different later.
+SYS will likely include options to print the contents of memory as strings,
+print memory as hex, print the contents of registers, putc, terminal cursor
+manipulation, etc.
+
+Usage:
+    SYS <various stuff>
+
+Format:
+    1111 [code: 4] [data: 8]
